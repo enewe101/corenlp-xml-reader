@@ -66,7 +66,12 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=['corenlp_xml_reader'],
-	indlude_package_data=True,
-	#package_data={'corenlp-xml-reader': ['README.md', 'data/*']},
+	#indlude_package_data=True,
+	package_data={'': [
+		'README.md',
+		'data/AIDA/*',
+		'data/CoreNLP/*',
+		'data/raw-text/*',
+	]},
 	install_requires=['bs4']
 )
