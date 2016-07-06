@@ -17,19 +17,19 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='theano-word2vec',
+    name='corenlp-xml-reader',
 
     # Versions should comply with PEP440.  For a discussion on 
 	# single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.1.5',
+    version='0.0.0',
 
-    description='word2vec using Theano and Lasagne',
+    description='Work with CoreNLP annotations in Python',
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/enewe101/word2vec',
+    url='https://github.com/enewe101/corenlp-xml-reader',
 
     # Author details
     author='Edward Newell',
@@ -53,22 +53,20 @@ setup(
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
 
-        # Specify the Python versions you support here. In particular, 
-		# ensure
-        # that you indicate whether you support Python 2, Python 3 or both.
+        # Specify the Python versions you support here.
         'Programming Language :: Python :: 2.7',
     ],
 
     # What does your project relate to?
-    keywords='word2vec word embeddings deep learning nlp',
+    keywords= (
+		'NLP natrual language processing computational linguistics '
+		'CoreNLP Stanford parser'
+	),
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=['word2vec'],
-	package_data={
-		'word2vec': ['README.md']
-	},
-	install_requires=[
-		'numpy', 'scipy', 'theano', 'lasagne', 'iterable-queue', 
-	]
+    packages=['corenlp-xml-reader'],
+	indlude_package_data=True,
+	#package_data={'corenlp-xml-reader': ['README.md', 'data/*']},
+	install_requires=['bs4']
 )
