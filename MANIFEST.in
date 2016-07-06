@@ -1,5 +1,5 @@
-include README.md
-include data/AIDA/*
-include data/CoreNLP/*
-include data/raw-text/*
+include corenlp_xml_reader/README.md
+include corenlp_xml_reader/data/AIDA/*
+include corenlp_xml_reader/data/CoreNLP/*
+include corenlp_xml_reader/data/raw-text/*
 
