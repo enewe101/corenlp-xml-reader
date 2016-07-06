@@ -1,2 +1,5 @@
 include README.md
-include data/*
+include data/AIDA/*
+include data/CoreNLP/*
+include data/raw-text/*
+
