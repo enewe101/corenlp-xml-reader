@@ -1,10 +1,12 @@
 import json
 
+from os import path
 from unittest import main, TestCase
 from annotated_text import AnnotatedText as A
 
-AIDA_PATH = '../data/AIDA/b670037f5942445d.txt.json'
-CORENLP_PATH = '../data/CoreNLP/b670037f5942445d.txt.xml'
+HERE = path.abspath(path.dirname(__file__))
+AIDA_PATH = path.join(HERE, '../data/AIDA/b670037f5942445d.txt.json')
+CORENLP_PATH = path.join(HERE, '../data/CoreNLP/b670037f5942445d.txt.xml')
 
 
 def load_test_article():
