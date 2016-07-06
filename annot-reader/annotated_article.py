@@ -17,6 +17,9 @@ class AnnotatedArticle(object):
 		'TIME', 'DATE', 'NUMBER', 'DURATION', 'PERCENT', 'SET', 'ORDINAL',
 		'MONEY'
 	])
+	LEGAL_DEPENDENCY_TYPES = set([
+		'collapsed-ccprocessed', 'collapsed', 'basic'
+	])
 
 	def __init__(
 		self, 
@@ -30,10 +33,10 @@ class AnnotatedArticle(object):
 		# EXCLUDE_NER_TYPES
 		self.exclude_ordinal_NERs = exclude_ordinal_NERs
 
-		# do some validation on dependencies
-		if dependencies not in [
-			'collapsed-ccprocessed', 'collapsed', 'basic'
-		]:
+		# User can choose the kind of dependency parse they wish to use
+		# Valid options listed below.  Ensure that a valid option was 
+		# chosen
+		if dependencies not in self.LEGAL_DEPENDENCY_TYPES:
 			raise ValueError(
 				'dependencies must be one of "basic", '
 				'"collapsed", or "collapsed-ccprocessed".'
@@ -41,12 +44,15 @@ class AnnotatedArticle(object):
 		
 		self.dependencies = dependencies
 
-		# parse the annotated article xml
+		# Parse the annotated article xml
 		if stanford_xml is not None:
-			self.read_stanford_xml(stanford_xml)
+			self._read_stanford_xml(stanford_xml)
+
+			# Parse the AIDA JSON
 			if aida_json is not None:
 				self.read_aida_json(aida_json)
 
+		# User cannot provide AIDA data unless stanford xml is also provided
 		elif aida_json is not None:
 			raise ValueError(
 				'You provide AIDA json without also providing Stanford'
@@ -54,50 +60,61 @@ class AnnotatedArticle(object):
 			)
 
 
-	def read_stanford_xml(self, article_string):
+	def _read_stanford_xml(self, article_string):
 		'''
-			read in an article that has been annotated by coreNLP, and
-			represent it using python objects
+		read in an article that has been annotated by coreNLP, and
+		represent it using python objects
 		'''
 
 		# a string representing the xml output by coreNLP
 		self.text = article_string
 
-		# The <head></head> tags don't get red correctly, turn them into 
-		# <headword> instead
+		# Parse the CoreNLP xml using BeautifulSoup
+		self._beautiful_soup_parse()
+
+		# Build a Python representation of all the sentences
+		self._read_all_sentences()
+
+		# build a Python representation of the coreference chains
+		self._build_coreferences()
+
+		# Link AIDA disambiguations to corresponding coreference chains
+		self._link_references()
+
+
+	def _beautiful_soup_parse(self):
+
+		# Before parsing the xml, we have to deal with a glitch in how 
+		# beatiful soup parses xml: it doesn't allow <head></head> tags, 
+		# which do appear in CoreNLP output.  Work around this by converting
+		# these into <headword> tags instead.
 		head_replacer =  re.compile(r'(?P<open_tag></?)\s*head\s*>')  
 		self.text = head_replacer.sub('\g<open_tag>headword>', self.text)
 
 		# Parse the xml
 		self.soup = Soup(self.text, 'html.parser')
-		
-		# First sentence null to match coreNLP numbering
-		self.sentences = [Sentence({'id':0})]	
-		self.tokens_by_offset = {}
-		self.tokens = []
 
-		# Read all the sentences
+
+	def _read_all_sentences(self):
+		'''
+		Process all of the sentence tags in the CoreNLP xml.  Each
+		Sentence has tokens and a dependency parse.  Read tokens' attributes
+		into Python types, and add links between tokens representing the
+		dependency tree.
+		'''
+
+		self.sentences = []	
+		self.tokens = []
+		self.tokens_by_offset = {}
 		self.num_sentences = 0
 		try:
 			for s in self.soup.find('sentences').find_all('sentence'):
 				self.num_sentences += 1
-				self.sentences.append(self.read_sentence(s))
+				self.sentences.append(self._read_sentence(s))
 
 		# Tolerate an article having no sentences
-		except AttributeError:
+		except AttributeError, e:
 			pass
-
-		# build the coreferences
-		self.coreferences = self.read_corefs(self.soup.find('coreference'))
-
-		# now that we have entities from NER and from coreferences
-		# we want to eliminate redundancies between them
-		self.references = self.merge_references(
-			self.sentences, self.coreferences)
-
-		self.link_references()
-
-		print 'hot and fresh'
 
 
 	def read_aida_json(self, json_string):
@@ -215,7 +232,7 @@ class AnnotatedArticle(object):
 
 			# handle an edge case where a token that goes beyond the 
 			# the range is inadvertently accessed
-			if token['endIndex'] > start + length:
+			if token['character_offset_end'] > start + length:
 				break
 
 			# Add the token to the list of spanned tokens
@@ -228,7 +245,7 @@ class AnnotatedArticle(object):
 			except KeyError:
 				pass
 
-			pointer = token['endIndex']
+			pointer = token['character_offset_end']
 
 		# If no tokens associated with the mention are found 
 		# (a zero-token mention?), fail
@@ -310,7 +327,7 @@ class AnnotatedArticle(object):
 		return self.next_coref_id - 1
 
 
-	def link_references(self):
+	def _link_references(self):
 		'''
 			once NER-groups and coreference chains have been merged into 
 			a standard "reference" type based on mentions, create a link 
@@ -341,7 +358,7 @@ class AnnotatedArticle(object):
 				except KeyError:
 					sentence['mentions'] = [mention]
 
-			# git all the sentences (by id) for a given reference
+			# Get all the sentences (by id) for a given reference
 			ref_sentence_ids = set([
 				token['sentence_id']
 				for mention in ref['mentions']
@@ -357,13 +374,13 @@ class AnnotatedArticle(object):
 					sentence['references'] = [ref]
 
 
-	def merge_references(self, sentences, coreferences):
+	def _standardize_coreferencing(self):
 
 		# gather together id-signature representing all entities from NER
 		all_ner_signatures = set()
 		ner_entity_lookup = {}
 
-		for s in sentences[1:]:
+		for s in self.sentences[1:]:
 			for entity in s['entities']:
 
 				# the sentence id and id of the entities head token 
@@ -384,7 +401,7 @@ class AnnotatedArticle(object):
 		all_mention_signatures = set()
 		all_coref_tokens = set()
 		# gather together id-signature representing all entities from coref
-		for coref in coreferences:
+		for coref in self.coreferences:
 
 			coref_signature = (
 				coref['representative']['sentence_id'],
@@ -414,7 +431,7 @@ class AnnotatedArticle(object):
 
 		# The corefs that are ners are valid and already assembled, copy 
 		# them
-		valid_refs = [
+		self.references = [
 			coref_entity_lookup[es] for es in valid_coref_signatures
 		]
 
@@ -422,22 +439,24 @@ class AnnotatedArticle(object):
 		# corefs
 		for signature in novel_ner_signatures:
 			entity = ner_entity_lookup[signature]
-			valid_refs.append({
+			self.references.append({
 				'id':self.get_next_coref_id(),
 				'mentions': [entity],
 				'representative': entity
 			})
 
-		return valid_refs
+		return self.references
 
 
-	def read_corefs(self, all_coreferences_tag):
 
+	def _build_coreferences(self):
+
+		all_coreferences_tag = self.soup.find('coreference')
 		if all_coreferences_tag is None:
 			return []
 
 		coreference_tags = all_coreferences_tag.find_all('coreference')
-		coreferences = []
+		self.coreferences = []
 		for ctag in coreference_tags:
 
 			coreference = {
@@ -447,11 +466,17 @@ class AnnotatedArticle(object):
 
 			for mention_tag in ctag.find_all('mention'):
 
-				sentence_id = int(mention_tag.find('sentence').text)
-				sentence = self.sentences[sentence_id]
-				start = int(mention_tag.find('start').text)
-				end = int(mention_tag.find('end').text)
-				head = int(mention_tag.find('headword').text)
+				# Convert 1-based ids to 0-based
+				sentence_id = int(mention_tag.find('sentence').text) - 1
+				try:
+					sentence = self.sentences[sentence_id]
+				except IndexError:
+					print len(self.sentences)
+					print sentence_id
+
+				start = int(mention_tag.find('start').text) - 1
+				end = int(mention_tag.find('end').text) - 1
+				head = int(mention_tag.find('headword').text) - 1
 
 				mention = {
 					'sentence_id': sentence_id,
@@ -476,9 +501,13 @@ class AnnotatedArticle(object):
 			if 'representative' not in coreference:
 				coreference['representative'] = coreference['mentions'][0]
 
-			coreferences.append(coreference)
+			self.coreferences.append(coreference)
 
-		return coreferences
+		# When a named entity gets refered to only once, CoreNLP doesn't
+		# make a coreference chain for that named entity.  But it is 
+		# better to standardize, and give all NERs a coreference chain 
+		# representation, even some "chains" contains only one mention.
+		self._standardize_coreferencing()
 
 
 	def filter_mention_tokens(self, tokens):
@@ -517,18 +546,21 @@ class AnnotatedArticle(object):
 				self.print_tree(child)
 
 
-	def read_sentence(self, sentence_tag):
+	def _read_sentence(self, sentence_tag):
 		'''
-			convert sentence tags to python dictionaries
+		Convert sentence tags to python dictionaries.
 		'''
+		# Note that CoreNLP uses 1-based indexing for sentence ids.  We
+		# convert to 0-based indexing.
 		sentence =  Sentence({
-			'id': int(sentence_tag['id']),
+			'id': int(sentence_tag['id']) - 1,
 			'tokens': self.read_tokens(sentence_tag),
+			'root': Token(),
 			#'parse': self.read_parse(sentence_tag.find('parse').text),
 		})
 
-		# give the tokens the dependency tree relation
-		self.read_dependencies(sentence, sentence_tag, self.dependencies)
+		# Give the tokens the dependency tree relation
+		self._read_dependencies(sentence, sentence_tag)
 
 		# Group the named entities together, and find the headword within
 		sentence['entities'] = self.read_entities(sentence['tokens'])
@@ -537,20 +569,20 @@ class AnnotatedArticle(object):
 		# Exclude the "null" tokens that simulate sentence head.
 		self.tokens.extend(sentence['tokens'][1:])
 		token_offsets = dict([
-			(t['beginIndex'], t) for t in sentence['tokens'][1:]
+			(t['character_offset_begin'], t) for t in sentence['tokens'][1:]
 		])
 		self.tokens_by_offset.update(token_offsets)
 
 		return sentence
 
 
-	def read_dependencies(self, sentence, sentence_tag, dependencies):
+	def _read_dependencies(self, sentence, sentence_tag):
 
-		if dependencies == 'collapsed-ccprocessed':
+		if self.dependencies == 'collapsed-ccprocessed':
 			dependencies_type = 'collapsed-ccprocessed-dependencies'
-		elif dependencies == 'collapsed':
+		elif self.dependencies == 'collapsed':
 			dependencies_type = 'collapsed-dependencies'
-		elif dependencies == 'basic':
+		elif self.dependencies == 'basic':
 			dependencies_type = 'basic-dependencies'
 		else:
 			raise ValueError(
@@ -564,10 +596,13 @@ class AnnotatedArticle(object):
 
 
 		for dep in dependencies:
-			governor_idx = int(dep.find('governor')['idx'])
-			governor = sentence['tokens'][governor_idx]
+			governor_idx = int(dep.find('governor')['idx']) - 1
+			if governor_idx == 0:
+				governor = sentence['root']
+			else:
+				governor = sentence['tokens'][governor_idx]
 
-			dependent_idx = int(dep.find('dependent')['idx'])
+			dependent_idx = int(dep.find('dependent')['idx']) - 1
 			dependent = sentence['tokens'][dependent_idx]
 
 			# refuse to add a link which would create a cycle 
@@ -759,31 +794,38 @@ class AnnotatedArticle(object):
 
 	def read_tokens(self, sentence_tag):
 		'''
-			convert token tag to python dictionary
+		Convert token tag to python dictionary.
 		'''
 
-		# include a root token, which becomes root of the dependency tree
-		tokens = [Token({'id':0,'word':'ROOT'})]
-		sentence_id = sentence_tag['id']
+		# Note, in CoreNLP's xml, token ids and sentence ids are 1-based.
+		# We convert to 0-based indices.
+		sentence_id = int(sentence_tag['id']) - 1
 
+		tokens = []
 		for token_tag in sentence_tag.find_all('token'):
-			try:
-				token = Token({
-					'id': int(token_tag['id']),
-					'sentence_id': int(sentence_id),
-					'word': self.fix_word(token_tag.find('word').text),
-					'lemma': token_tag.find('lemma').text,
-					'pos': token_tag.find('pos').text,
-					'ner': (
-						None if token_tag.find('ner').text == 'O' 
-						else token_tag.find('ner').text),
-					'beginIndex': int(
-						token_tag.find('characteroffsetbegin').text),
-					'endIndex': int(
-						token_tag.find('characteroffsetend').text),
-				})
-			except AttributeError:
-				print token_tag
+
+			# The "Speaker" property can be missing, so handle that case
+			if token_tag.find('Speaker') is not None:
+				speaker = token_tag.find('Speaker').text
+			else:
+				speaker = None
+
+			# Get rest of the token's properties and make a Token object
+			token = Token({
+				'id': int(token_tag['id']) - 1,
+				'sentence_id': sentence_id,
+				'word': self.fix_word(token_tag.find('word').text),
+				'lemma': token_tag.find('lemma').text,
+				'pos': token_tag.find('pos').text,
+				'ner': (
+					None if token_tag.find('ner').text == 'O' 
+					else token_tag.find('ner').text),
+				'character_offset_begin': int(
+					token_tag.find('characteroffsetbegin').text),
+				'character_offset_end': int(
+					token_tag.find('characteroffsetend').text),
+				'speaker': speaker
+			})
 
 			tokens.append(token)
 
@@ -802,13 +844,17 @@ class AnnotatedArticle(object):
 
 
 	def __str__(self):
-		string = ''
-		for s in self.sentences:
-			string +=  str(s) + '\n'
+		sentence_strings = []
+		for i, s in enumerate(self.sentences):
+			tokens = ' '.join([t['word'] for t in s['tokens']])
+			sentence_string = 'Sentence %d:\n%s' % (i, tokens)
+			sentence_strings.append(sentence_string)
 
-		return string
-				
-				
+		return '\n\n'.join(sentence_strings)
+
+	
+	def __repr__(self):
+		return self.__str__()
 
 
 
@@ -833,26 +879,18 @@ class Sentence(dict):
 		return ' '.join([t['word'] for t in self['tokens'][1:]])
 
 
-	def __repr__(self):
-		if 'tokens' not in self:
-			return '%d: (null sentence)' % self['id']
-
-		return(
-			'<Sentence %d: ' % self['id'] 
-			+ ' '.join([t['word'] for t in self['tokens'][1:]]) + '>'
-		)
-
-
 	def __str__(self):
-		if 'tokens' not in self:
-			return 'S#:%d (null sentence)\n' % self['id']
 
-		string = 'S%d\n' % self['id']
+		string = 'Sentence %d:\n' % self['id']
 
 		for t in self['tokens']:
 			string += '\t%s\n' % str(t)
 
 		return string
+
+
+	def __repr__(self):
+		return self.__str__()
 
 
 	def shortest_path(self, source, target):
@@ -948,13 +986,21 @@ class Token(dict):
 
 	def __str__(self):
 
-		try:
-			ner = '-' if self['ner'] is None else self['ner']
-			return 'T%d %s [%s] (%s)' % (
-				self['id'], self['word'], self['pos'], ner)
+		offset = '(%d,%d)' % ( 
+			self['character_offset_begin'], 
+			self['character_offset_end']
+		)
+		ner = self['ner'] if self['ner'] is not None else '-'
 
-		except KeyError:
-			return 'T%d %s' % (self['id'], self['word'])
+		description = 'Token %d: %s %s %s %s' % (
+			self['id'], self['word'], offset, self['pos'], ner
+		)
+
+		return description
+
+
+	def __repr__(self):
+		return self.__str__()
 
 
 	def get_parents(self):
