@@ -26,12 +26,24 @@ class AnnotatedArticle(object):
 		stanford_xml=None, 
 		aida_json=None,
 		dependencies='collapsed-ccprocessed',
-		exclude_ordinal_NERs=False
+		exclude_ordinal_NERs=False,
+		exclude_long_mentions=False,
+		long_mention_threshold=5,
+		exclude_non_ner_coreferences=False
 	):
 
 		# If true, do not include NER's of the types listed in 
 		# EXCLUDE_NER_TYPES
 		self.exclude_ordinal_NERs = exclude_ordinal_NERs
+
+		# If true, ignore coreference mentions that are more than 
+		# long_mention_threshold number of tokens long
+		self.exclude_long_mentions = exclude_long_mentions
+		self.long_mention_threshold = long_mention_threshold
+
+		# If true, ignore coreference chains that don't have a Named Entity
+		# as their representative mention.  
+		self.exclude_non_ner_coreferences = exclude_non_ner_coreferences
 
 		# User can choose the kind of dependency parse they wish to use
 		# Valid options listed below.  Ensure that a valid option was 
@@ -50,9 +62,10 @@ class AnnotatedArticle(object):
 
 			# Parse the AIDA JSON
 			if aida_json is not None:
-				self.read_aida_json(aida_json)
+				self._read_aida_json(aida_json)
 
-		# User cannot provide AIDA data unless stanford xml is also provided
+		# User cannot provide AIDA data unless stanford xml is also 
+		# provided
 		elif aida_json is not None:
 			raise ValueError(
 				'You provide AIDA json without also providing Stanford'
@@ -98,43 +111,47 @@ class AnnotatedArticle(object):
 	def _read_all_sentences(self):
 		'''
 		Process all of the sentence tags in the CoreNLP xml.  Each
-		Sentence has tokens and a dependency parse.  Read tokens' attributes
-		into Python types, and add links between tokens representing the
-		dependency tree.
+		Sentence has tokens and a dependency parse.  Read tokens' 
+		attributes into Python types, and add links between tokens 
+		representing the dependency tree.
 		'''
 
+		# Initialize some containers to hold data found in sentences
 		self.sentences = []	
 		self.tokens = []
 		self.tokens_by_offset = {}
 		self.num_sentences = 0
-		try:
-			for s in self.soup.find('sentences').find_all('sentence'):
-				self.num_sentences += 1
-				self.sentences.append(self._read_sentence(s))
 
 		# Tolerate an article having no sentences
+		try:
+			sent_tags = self.soup.find('sentences').find_all('sentence')
 		except AttributeError, e:
 			pass
 
+		# Process each sentence tag
+		for s in sent_tags:
+			self.num_sentences += 1
+			self.sentences.append(self._read_sentence(s))
 
-	def read_aida_json(self, json_string):
 
-		# read the file
+	def _read_aida_json(self, json_string):
+
+		# Parse the json
 		aida_data = json.loads(json_string)
 
-		# tie each mention disambiguated by aida to a corresponding mention
+		# Tie each mention disambiguated by aida to a corresponding mention
 		# in the stanford output
 		for aida_mention in aida_data['mentions']:
-			self.link_aida_mention(aida_mention, aida_data)
+			self._link_aida_mention(aida_mention, aida_data)
 
 		# For each referenece (group of mentions believed to refer to the
 		# same entity) check for inconsistent entities
 		self.disambiguated_references = []
 		for reference in self.references:
-			self.link_aida_reference(reference, aida_data)
+			self._link_aida_reference(reference, aida_data)
 
 
-	def link_aida_reference(self, reference, aida_data):
+	def _link_aida_reference(self, reference, aida_data):
 
 			# Tally up the kbids that have been attached mentions within 
 			# this reference
@@ -153,6 +170,8 @@ class AnnotatedArticle(object):
 			kbids_by_popularity = kbid_counter.most_common()
 
 			# Fail if no kbids were linked to mentions in this reference
+			# IDEA: would it be more expected to set kbid to None rather
+			# than have it not exist at all?
 			if len(kbids_by_popularity) == 0:
 				return
 
@@ -171,7 +190,6 @@ class AnnotatedArticle(object):
 			], key=lambda x: x[0])
 
 			# Assign the highest confidence kbid to the reference
-			# Also, decode any escaped unicode
 			kbId = score_tallied_kbids[0][1]
 			reference['kbIdentifier'] = kbId
 
@@ -186,7 +204,7 @@ class AnnotatedArticle(object):
 			self.disambiguated_references.append(reference)
 
 
-	def link_aida_mention(self, aida_mention, aida_data):
+	def _link_aida_mention(self, aida_mention, aida_data):
 
 		# take the best matched entity found by AIDA for this mention
 		try:
@@ -208,7 +226,7 @@ class AnnotatedArticle(object):
 			return 
 
 		# Find the corresponding Stanford-identified mention
-		mention = self.find_or_create_mention_by_offset_range(
+		mention = self._find_or_create_mention_by_offset_range(
 			aida_mention['offset'], aida_mention['length'])
 
 		# fail if no associated mention could be found:
@@ -220,7 +238,7 @@ class AnnotatedArticle(object):
 		mention['types'] = types
 
 
-	def find_or_create_mention_by_offset_range(self, start, length):
+	def _find_or_create_mention_by_offset_range(self, start, length):
 
 		pointer = start
 		mention = None
@@ -228,7 +246,7 @@ class AnnotatedArticle(object):
 		while pointer <= start + length:
 
 			# find the next token
-			token = self.get_token_after(pointer)
+			token = self._get_token_after(pointer)
 
 			# handle an edge case where a token that goes beyond the 
 			# the range is inadvertently accessed
@@ -256,10 +274,7 @@ class AnnotatedArticle(object):
 		if mention is not None:
 			return mention
 
-		# Otherwise, create a mention
-		# Need to add ref to self.references
-		#
-		# make the mention
+		# Otherwise, create a mention and a reference
 		sentence_id = found_tokens[0]['sentence_id']
 		sentence = self.sentences[sentence_id]
 		new_mention = {
@@ -271,7 +286,7 @@ class AnnotatedArticle(object):
 			'sentence': sentence
 		}
 		ref = {
-			'id': self.get_next_coref_id(),
+			'id': self._get_next_coref_id(),
 			'mentions': [new_mention],
 			'representative': new_mention
 		}
@@ -297,7 +312,7 @@ class AnnotatedArticle(object):
 		return new_mention
 
 
-	def get_token_after(self, pointer):
+	def _get_token_after(self, pointer):
 		token = None
 		while token is None:
 
@@ -315,9 +330,9 @@ class AnnotatedArticle(object):
 
 
 
-	def get_next_coref_id(self):
+	def _get_next_coref_id(self):
 		'''
-			yield incrementing coreference ids.
+		yield incrementing coreference ids.
 		'''
 		try:
 			self.next_coref_id += 1
@@ -329,13 +344,10 @@ class AnnotatedArticle(object):
 
 	def _link_references(self):
 		'''
-			once NER-groups and coreference chains have been merged into 
-			a standard "reference" type based on mentions, create a link 
-			from each mention's tokens back to the mention, and create a 
-			link from the sentence to the entities for which it has 
-			mentions.
+		Create a link from each mention's tokens back to the mention, and 
+		create a link from the sentence to the entities for which it has 
+		mentions.
 		'''
-
 		for ref in self.references:
 			for mention in ref['mentions']:
 
@@ -347,7 +359,8 @@ class AnnotatedArticle(object):
 					token['mention'] = mention
 
 				# note the extent of the mention
-				mention['start'] = min([t['id'] for t in mention['tokens']])
+				mention['start'] = min(
+					[t['id'] for t in mention['tokens']])
 				mention['end'] = max([t['id'] for t in mention['tokens']])
 
 				# link the sentence to the mention
@@ -376,31 +389,31 @@ class AnnotatedArticle(object):
 
 	def _standardize_coreferencing(self):
 
-		# gather together id-signature representing all entities from NER
+		# Generate an identifying signature for each NER entity, which
+		# will be used to cros-reference with coreference mentions.
 		all_ner_signatures = set()
 		ner_entity_lookup = {}
-
-		for s in self.sentences[1:]:
+		for s in self.sentences:
 			for entity in s['entities']:
 
-				# the sentence id and id of the entities head token 
+				# the sentence id and id of the entity's head token 
 				# uniquely identifies it, and is hashable
 				entity_signature = (
 					entity['sentence_id'], 	# idx of the sentence
 					entity['head']['id'],	# idx of entity's head token
-					#entity['head']['word'] # debug
 				)
+				all_ner_signatures.add(entity_signature)
 
 				# keep a link back to the entity based on its signature
 				ner_entity_lookup[entity_signature] = entity
 
-				all_ner_signatures.add(entity_signature)
-
+		# Generate an identifying signature for each coreference and for
+		# each mention.  We will then be able to cross-reference the 
+		# coreference chains / mentions and the entities
 		all_coref_signatures = set()
 		coref_entity_lookup = {}
 		all_mention_signatures = set()
 		all_coref_tokens = set()
-		# gather together id-signature representing all entities from coref
 		for coref in self.coreferences:
 
 			coref_signature = (
@@ -429,51 +442,51 @@ class AnnotatedArticle(object):
 		# get the coref signatures that are actual ners
 		valid_coref_signatures = all_coref_signatures & all_ner_signatures
 
-		# The corefs that are ners are valid and already assembled, copy 
-		# them
-		self.references = [
-			coref_entity_lookup[es] for es in valid_coref_signatures
-		]
+		# In some cases, we want "coreferences" to mean only coreference
+		# chains whose representative mention is a NER.  Otherwise,
+		# we'll take all coreferences.  A coreference chain could, for 
+		# example, refer to an entity mentioned several times using a
+		# common noun (e.g. "the police").
+		if self.exclude_non_ner_coreferences:
+			self.references = [
+				coref_entity_lookup[es] for es in valid_coref_signatures
+			]
+		else:
+			self.references = [coref for coref in self.coreferences]
 
 		# build the ners not yet among the corefs into same structure as 
 		# corefs
 		for signature in novel_ner_signatures:
 			entity = ner_entity_lookup[signature]
 			self.references.append({
-				'id':self.get_next_coref_id(),
+				'id':self._get_next_coref_id(),
 				'mentions': [entity],
 				'representative': entity
 			})
 
-		return self.references
-
-
 
 	def _build_coreferences(self):
 
-		all_coreferences_tag = self.soup.find('coreference')
-		if all_coreferences_tag is None:
-			return []
-
-		coreference_tags = all_coreferences_tag.find_all('coreference')
 		self.coreferences = []
+
+		coref_tag_container = self.soup.find('coreference')
+		if coref_tag_container is None:
+			return
+
+		coreference_tags = coref_tag_container.find_all('coreference')
 		for ctag in coreference_tags:
 
 			coreference = {
-				'id': self.get_next_coref_id(),
+				'id': self._get_next_coref_id(),
 				'mentions':[],
 			}
 
+			# Process each mention in this coreference chain
 			for mention_tag in ctag.find_all('mention'):
 
-				# Convert 1-based ids to 0-based
+				# Recall that we convert 1-based ids to 0-based
 				sentence_id = int(mention_tag.find('sentence').text) - 1
-				try:
-					sentence = self.sentences[sentence_id]
-				except IndexError:
-					print len(self.sentences)
-					print sentence_id
-
+				sentence = self.sentences[sentence_id]
 				start = int(mention_tag.find('start').text) - 1
 				end = int(mention_tag.find('end').text) - 1
 				head = int(mention_tag.find('headword').text) - 1
@@ -484,8 +497,12 @@ class AnnotatedArticle(object):
 					'head': sentence['tokens'][head]
 				}
 
-				# long mentions are typically nonsense
-				if len(mention['tokens']) > 5:
+				# Long mentions are typically nonsense
+				do_exclude = (
+					self.exclude_long_mentions and 
+					len(mention['tokens']) > self.long_mention_threshold
+				)
+				if do_exclude:
 					continue
 
 				if 'representative' in mention_tag.attrs:
@@ -494,19 +511,22 @@ class AnnotatedArticle(object):
 				coreference['mentions'].append(mention)
 
 			# if there's no mentions left in the coreference, don't keep it
+			# (this can happen if we are excluding long mentions.)
 			if len(coreference['mentions']) < 1:
 				continue
 
-			# if we didn't assign a representative mention, do it now
+			# if we didn't assign a representative mention, assign it to
+			# the first mention
 			if 'representative' not in coreference:
 				coreference['representative'] = coreference['mentions'][0]
 
 			self.coreferences.append(coreference)
 
-		# When a named entity gets refered to only once, CoreNLP doesn't
-		# make a coreference chain for that named entity.  But it is 
-		# better to standardize, and give all NERs a coreference chain 
-		# representation, even some "chains" contains only one mention.
+		# When a named entity gets referred to only once, CoreNLP doesn't
+		# make a coreference chain for that named entity.  This makes 
+		# scripts more complicated.  Things are simplified if all NERs are
+		# guaranteed to have a coreference chain representation, even if
+		# some "chains" contains only one mention.
 		self._standardize_coreferencing()
 
 
@@ -554,7 +574,7 @@ class AnnotatedArticle(object):
 		# convert to 0-based indexing.
 		sentence =  Sentence({
 			'id': int(sentence_tag['id']) - 1,
-			'tokens': self.read_tokens(sentence_tag),
+			'tokens': self._read_tokens(sentence_tag),
 			'root': Token(),
 			#'parse': self.read_parse(sentence_tag.find('parse').text),
 		})
@@ -563,13 +583,14 @@ class AnnotatedArticle(object):
 		self._read_dependencies(sentence, sentence_tag)
 
 		# Group the named entities together, and find the headword within
-		sentence['entities'] = self.read_entities(sentence['tokens'])
+		sentence['entities'] = self._read_entities(sentence['tokens'])
 
 		# Add tokens to global list and to the token offset-lookup table
 		# Exclude the "null" tokens that simulate sentence head.
-		self.tokens.extend(sentence['tokens'][1:])
+		self.tokens.extend(sentence['tokens'])
+
 		token_offsets = dict([
-			(t['character_offset_begin'], t) for t in sentence['tokens'][1:]
+			(t['character_offset_begin'], t) for t in sentence['tokens']
 		])
 		self.tokens_by_offset.update(token_offsets)
 
@@ -594,8 +615,8 @@ class AnnotatedArticle(object):
 			'dependencies', type=dependencies_type
 		).find_all('dep')
 
-
 		for dep in dependencies:
+
 			governor_idx = int(dep.find('governor')['idx']) - 1
 			if governor_idx == 0:
 				governor = sentence['root']
@@ -691,9 +712,9 @@ class AnnotatedArticle(object):
 		return strings
 
 
-	def read_entities(self, tokens):
+	def _read_entities(self, tokens):
 		'''
-			collect the entities into a mention-like object
+		collect the entities into a mention-like object
 		'''
 
 		entities = []
@@ -701,7 +722,7 @@ class AnnotatedArticle(object):
 		cur_entity = None
 		entity_idx = -1
 
-		for token in tokens[1:]:	# skip the root token
+		for token in tokens:
 
 			exclude = False
 			if self.exclude_ordinal_NERs:
@@ -734,7 +755,6 @@ class AnnotatedArticle(object):
 				token['entity_idx'] = entity_idx
 
 			last_entity_type = token['ner']
-
 
 		# if sentence end coincides with entity end, be sure to add entity
 		if cur_entity is not None:
@@ -792,7 +812,7 @@ class AnnotatedArticle(object):
 		return head
 
 
-	def read_tokens(self, sentence_tag):
+	def _read_tokens(self, sentence_tag):
 		'''
 		Convert token tag to python dictionary.
 		'''
@@ -876,7 +896,7 @@ class Sentence(dict):
 			normalized.
 		'''
 		# note, the first token is a "root token", which has to be skipped
-		return ' '.join([t['word'] for t in self['tokens'][1:]])
+		return ' '.join([t['word'] for t in self['tokens']])
 
 
 	def __str__(self):
