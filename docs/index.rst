@@ -186,11 +186,14 @@ and ``entities`` properties which can be iterated over directly..
 .. py:class:: AnnotatedText(corenlp_xml, **kwargs)
 
    Create a new AnnotatedText object.  Only the first parameter is normally
-   needed.  The remaining parameters control the kind of dependency parse
-   used and whether to exclude certain kinds of named entities.
+   needed.  The remaining parameters enable adding entity linking data from
+   the AIDA software, controlling the kind of dependency parse
+   used, and filtering the kinds of named entities, coreference chains,
+   and mentions that are included (by default all those provided by CoreNLP
+   are are included).
 
    :param str corenlp_xml: An xml string output by CoreNLP.
-   :param str aida_json=None: A JSON string output by AIDA.  AIDA is a program that disambiguates named entities, linking them to the YAGO knowledge base.  If the JSON output of AIDA is provided, then ``entities``, ``mentions`` and ``references`` entries will be augmented with entity linking information, see below for details.
+   :param str aida_json=None: A JSON string output by AIDA.  AIDA is a program that disambiguates named entities, linking them to the YAGO knowledge base.  If the JSON output of AIDA is provided, then ``entities``, ``mentions`` and ``references`` entries will be augmented with entity linking information.
    :param str dependencies='collapsed-ccprocessed': Determines which kind of dependencies will be used in constructing dependency trees.  Three options are available: ``'collapsed-ccprocessed'`` (the default), ``'collapsed'``, and ``'basic'``.
    :param bool exclude_ordinal_NERs=False: Whether to recognize ordinal named entities.  If ``True``, named entities of the following types will be ignored: ``'TIME'``, ``'DATE'``, ``'NUMBER'``, ``'DURATION'``, ``'PERCENT'``, ``'SET'``, ``'ORDINAL'``, and ``'MONEY'``.
    :param bool exclude_long_mentions=False: CoreNLP occaisionally includes mentions, as part of coreference chains, that are very long noun phrases.  These mentions can be surprising and are often not useful.  Setting this option to ``True`` causes any mentions longer that the value specified by ``long_mention_threshold`` to be discarded (default length is 5 tokens).
