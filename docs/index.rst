@@ -27,6 +27,18 @@ The ``corenlp_xml_reader`` provides an API in Python that simplifies
 access to CoreNLP's annotations and traversal of the document, while
 ironing out some of the inconsistencies.
 
+Install
+-------
+
+Basic install: ``pip install corenlp-xml-reader``
+
+Hackable install: 
+.. code-block:: bash
+
+   git clone https://github.com/enewe101/corenlp-xml-reader.git
+   cd corenlp-xml-reader
+   python setup.py develop
+
 Example
 -------
 
