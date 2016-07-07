@@ -23,7 +23,7 @@ class AnnotatedText(object):
 
 	def __init__(
 		self, 
-		stanford_xml=None, 
+		corenlp_xml=None, 
 		aida_json=None,
 		dependencies='collapsed-ccprocessed',
 		exclude_ordinal_NERs=False,
@@ -57,8 +57,8 @@ class AnnotatedText(object):
 		self.dependencies = dependencies
 
 		# Parse the annotated article xml
-		if stanford_xml is not None:
-			self._read_stanford_xml(stanford_xml)
+		if corenlp_xml is not None:
+			self._read_stanford_xml(corenlp_xml)
 
 			# Parse the AIDA JSON
 			if aida_json is not None:
