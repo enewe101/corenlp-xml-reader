@@ -74,10 +74,10 @@ The ``tokens`` property is a list of the sentence's tokens:
 
 .. code-block:: python
 
-   >>> obama = sentence.tokens[1]
+   >>> obama = sentence['tokens'][1]
    >>> obama
    ' 0: Obama (10,14) NNP PERSON'
-   >>> term = sentence.tokens[7]
+   >>> term = sentence['tokens'][7]
    >>> term
    ' 7: term (39,42) NN -'
 
@@ -140,7 +140,7 @@ First, we can get the mention that "Obama" is part of:
 .. code-block:: python
 
     >>> first_mention = obama['mention']
-    >>> first_mention.tokens
+    >>> first_mention['tokens']
     [' 0: President (0,8) -', ' 1: Obama (10,14) PERSON']
 
 Then, from a given mention, we can access the chain, and all other mentions.
