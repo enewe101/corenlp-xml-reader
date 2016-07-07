@@ -33,6 +33,7 @@ Install
 Basic install: ``pip install corenlp-xml-reader``
 
 Hackable install: 
+
 .. code-block:: bash
 
    git clone https://github.com/enewe101/corenlp-xml-reader.git
