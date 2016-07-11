@@ -1010,6 +1010,8 @@ class Token(dict):
 			self['id'], self['word'], offset, self['pos'], ner
 		)
 
+		description = description.encode('utf8')
+
 		return description
 
 
