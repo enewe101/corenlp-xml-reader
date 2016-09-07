@@ -471,9 +471,10 @@ class AnnotatedText(object):
 
 		coref_tag_container = self.soup.find('coreference')
 		if coref_tag_container is None:
-			return
+			coreference_tags = []
+		else:
+			coreference_tags = coref_tag_container.find_all('coreference')
 
-		coreference_tags = coref_tag_container.find_all('coreference')
 		for ctag in coreference_tags:
 
 			coreference = {
