@@ -122,11 +122,13 @@ class AnnotatedText(object):
 		self.tokens_by_offset = {}
 		self.num_sentences = 0
 
-		# Tolerate an article having no sentences
+		# Get all the sentence tags
 		try:
 			sent_tags = self.soup.find('sentences').find_all('sentence')
+
+		# Tolerate an article having no sentences
 		except AttributeError, e:
-			pass
+			sent_tags = []
 
 		# Process each sentence tag
 		for s in sent_tags:
@@ -642,15 +644,8 @@ class AnnotatedText(object):
 
 			dep_type = dep['type']
 		
-			try:
-				governor['children'].append((dep_type, dependent))
-			except KeyError:
-				governor['children'] = [(dep_type, dependent)]
-
-			try:
-				dependent['parents'].append((dep_type, governor))
-			except KeyError:
-				dependent['parents'] = [(dep_type, governor)]
+			governor['children'].append((dep_type, dependent))
+			dependent['parents'].append((dep_type, governor))
 
 
 	def collect_descendents(self, token):
@@ -846,7 +841,9 @@ class AnnotatedText(object):
 					token_tag.find('characteroffsetbegin').text),
 				'character_offset_end': int(
 					token_tag.find('characteroffsetend').text),
-				'speaker': speaker
+				'speaker': speaker,
+				'children': [],
+				'parents': []
 			})
 
 			tokens.append(token)
