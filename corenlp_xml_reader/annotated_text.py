@@ -126,7 +126,7 @@ class AnnotatedText(object):
 		try:
 			sent_tags = self.soup.find('sentences').find_all('sentence')
 		except AttributeError, e:
-			pass
+			sent_tags = []
 
 		# Process each sentence tag
 		for s in sent_tags:
