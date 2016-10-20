@@ -182,7 +182,7 @@ In addition to the coreference chain (``'reference'``), we get the id of
 the sentence in which the mention is found, the list
 of token objects in the mention, the slice indices 
 (``'start'`` and ``'end'``) for those tokens as they occur in the 
-sentence's token list sentence's token list, and the head token of the 
+sentence's token list, and the head token of the 
 mentinon.
 
 References have various properties too:
@@ -193,7 +193,8 @@ References have various properties too:
    ['mentions', 'id', 'representative']
 
 In addition to the mentions that are part of the coreference chain, we
-get a unique id (unique on a per-article-basis), and a reference to the
+get an id for the coreference chain (unique on a per-article-basis), 
+and a reference to the
 "representative" mention.  The representative mention is the one that is
 deemed to have the fullest realization of the object's name.  So in our
 example, the representative reference would be "President Obama", not "he".
@@ -211,8 +212,8 @@ a given sentence, using its ``mentions`` and ``references`` properties.
     1
 
 One thing to note is that mentions and references aren't necessarily 
-anchored to any named entity.  But they often are: in our example, we 
-had "Obama".  To contrast, consider this sentence:
+anchored to any named entity (though they often are). 
+For example, consider this sentence:
 
    *The police are yet to find any suspects.  They say they will continue 
    their search.*
