@@ -78,6 +78,7 @@ Usually you'll access parts of the document using the ``sentences`` list.
 
 A ``Sentence`` is a special class that, for the most part, feels like a 
 simple ``dict``.  
+
 The ``tokens`` property is a list of the sentence's tokens:
 
 .. code-block:: python

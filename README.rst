@@ -50,8 +50,12 @@ Suppose we have the one-sentence document:
    *President Obama cannot run for a third term (but I think he wants to).*
 
 Let's assume that it has been processed by CoreNLP, creating the output 
-file ``obama.txt.xml``.  Let's import the module and get an ``AnnotatedText`` object.
+file ``obama.txt.xml``.  
 
+Instantiation
+~~~~~~~~~~~~~
+The first thing we do is import the module and get an ``AnnotatedText`` 
+object.
 
 .. code-block:: python
 
@@ -59,6 +63,8 @@ file ``obama.txt.xml``.  Let's import the module and get an ``AnnotatedText`` ob
    >>> xml = open('obama.txt.xml').read()
    >>> annotated_text = A(xml)
 
+Sentences
+~~~~~~~~~
 Usually you'll access parts of the document using the ``sentences`` list.
 
 .. code-block:: python
@@ -72,6 +78,7 @@ Usually you'll access parts of the document using the ``sentences`` list.
 
 A ``Sentence`` is a special class that, for the most part, feels like a 
 simple ``dict``.  
+
 The ``tokens`` property is a list of the sentence's tokens:
 
 .. code-block:: python
@@ -83,6 +90,8 @@ The ``tokens`` property is a list of the sentence's tokens:
    >>> term
    ' 7: term (39,42) NN -'
 
+Tokens
+~~~~~~
 Tokens have properties corresponding to CoreNLP's annotations, plus some 
 other stuff:
 
@@ -90,9 +99,12 @@ other stuff:
 
    >>> obama.keys()
    ['word', 'character_offset_begin', 'character_offset_end', 'pos', 
-   'lemma', 'sentence_id', 'entity_idx', 'speaker', 'mention', 'parents', 
+   'lemma', 'sentence_id', 'entity_idx', 'speaker', 'mentions', 'parents', 
    'ner', 'id']
 
+
+Named Entities
+~~~~~~~~~~~~~~
 "Obama" is the name of a person, so, if CoreNLP is working well, it should
 pick that up.  Named entity information is found in the ``ner`` property:
 
@@ -103,6 +115,8 @@ pick that up.  Named entity information is found in the ``ner`` property:
    >>> term['ner'] is None
    True
 
+POS Tags
+~~~~~~~~
 Similarly we can check the part-of-speech:
 
 .. code-block:: python
@@ -112,6 +126,8 @@ Similarly we can check the part-of-speech:
    >>> term['pos']
    'NN'
 
+Dependency Tree
+~~~~~~~~~~~~~~~
 We can traverse the dependency tree using the ``parents`` and ``children``
 properties.  In our example, "run" is the parent of "Obama" 
 (because "Obama" is the subject (``nsubj``) of "run"):
@@ -133,6 +149,8 @@ special ``root`` property that stores the head word.  Usually it's a verb:
    >>> sentence['root']
    ' 3: run (23,25) -'
 
+Coreference Chains
+~~~~~~~~~~~~~~~~~~
 A coreference chain is a series of references to the same entity.  In our 
 example, "President Obama" and "he" are each *mentions* from the same
 coreference chain.  We can access all the mentions of a coreference chain.
@@ -141,21 +159,65 @@ First, we can get the mention that "Obama" is part of:
 
 .. code-block:: python
 
-    >>> first_mention = obama['mention']
+    >>> first_mention = obama['mentions'][0]
     >>> first_mention['tokens']
     [' 0: President (0,8) -', ' 1: Obama (10,14) PERSON']
 
-Then, from a given mention, we can access the chain, and all other mentions.
-The coreference chain that includes "President Obama" should also include
-"he":
+Note that a token can be part of multiple mentions.  For example, consider
+the phrase "Obama's pyjamas".  If his pyjamas are mentioned multiple times,
+then there will be a coreference chain made for it, as well as Obama
+himself.  And in the phrase "Obama's pyjamas", the token "Obama" is both 
+part of a mention corresponding to the 44th President of the United States,
+and part of a mention corresponding to some garments for sleeping.
+
+Once we have gotten ahold of a mention, we can access the coreference
+chain that it belongs to, which is found in the mention's ``'reference'`` 
+property.  Conversely, if we have accessed a coreference chain, we can
+find all of its mentions by looking at its ``'mentions'`` property.
+
+In our sentence "President Obama" and "he" are part of the same coreference
+chain.  Starting from the mention containing the token "Obama", we can
+acces the coreference chain starting, and then access the other mention
+of Obama (the one consisting of the token "he"):
 
 .. code-block:: python
 
    >>> reference = first_mention['reference']
    >>> len(reference['mentions'])
    2
-   >>> reference['mentions'][1]['tokens']
+   >>> second_mention = reference['mentions'][1]
+   >>> second_mention['tokens']
    ['12: he (57,58) -']
+
+Mentions have various properties:
+
+.. code-block:: python
+
+   >>> first_mention.keys()
+   ['head', 'end', 'reference', 'tokens', 'start', 'sentence_id']
+
+In addition to the coreference chain (``'reference'``), we get the id of 
+the sentence in which the mention is found, the list
+of token objects in the mention, the slice indices 
+(``'start'`` and ``'end'``) for those tokens as they occur in the 
+sentence's token list, and the head token of the 
+mentinon.
+
+References have various properties too:
+
+.. code-block:: python
+
+   >>> reference.keys()
+   ['mentions', 'id', 'representative']
+
+In addition to the mentions that are part of the coreference chain, we
+get an id for the coreference chain (unique on a per-article-basis), 
+and a reference to the
+"representative" mention.  The representative mention is the one that is
+deemed to have the fullest realization of the object's name.  So in our
+example, the representative reference would be "President Obama", not "he".
+This is useful for getting the human-readable name to represent the
+coreference chain.
 
 We can access all of the mentions or all of the coreference chains, for 
 a given sentence, using its ``mentions`` and ``references`` properties. 
@@ -168,8 +230,8 @@ a given sentence, using its ``mentions`` and ``references`` properties.
     1
 
 One thing to note is that mentions and references aren't necessarily 
-anchored to any named entity.  But they often are: in our example, we 
-had "Obama".  To contrast, consider this sentence:
+anchored to any named entity (though they often are). 
+For example, consider this sentence:
 
    *The police are yet to find any suspects.  They say they will continue 
    their search.*
@@ -183,6 +245,8 @@ property of the sentence.
 The document as a whole also provides global ``mentions``, ``references``,
 and ``entities`` properties which can be iterated over directly..
 
+Reference
+---------
 .. py:class:: AnnotatedText(corenlp_xml, **kwargs)
 
    Create a new AnnotatedText object.  Only the first parameter is normally
