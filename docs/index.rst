@@ -49,6 +49,8 @@ Suppose we have the one-sentence document:
 
    *President Obama cannot run for a third term (but I think he wants to).*
 
+Instantiation
+~~~~~~~~~~~~~
 Let's assume that it has been processed by CoreNLP, creating the output 
 file ``obama.txt.xml``.  Let's import the module and get an ``AnnotatedText`` object.
 
@@ -59,6 +61,8 @@ file ``obama.txt.xml``.  Let's import the module and get an ``AnnotatedText`` ob
    >>> xml = open('obama.txt.xml').read()
    >>> annotated_text = A(xml)
 
+Sentences
+~~~~~~~~~
 Usually you'll access parts of the document using the ``sentences`` list.
 
 .. code-block:: python
@@ -83,6 +87,8 @@ The ``tokens`` property is a list of the sentence's tokens:
    >>> term
    ' 7: term (39,42) NN -'
 
+Tokens
+~~~~~~
 Tokens have properties corresponding to CoreNLP's annotations, plus some 
 other stuff:
 
@@ -93,6 +99,9 @@ other stuff:
    'lemma', 'sentence_id', 'entity_idx', 'speaker', 'mentions', 'parents', 
    'ner', 'id']
 
+
+Named Entities
+~~~~~~~~~~~~~~
 "Obama" is the name of a person, so, if CoreNLP is working well, it should
 pick that up.  Named entity information is found in the ``ner`` property:
 
@@ -103,6 +112,8 @@ pick that up.  Named entity information is found in the ``ner`` property:
    >>> term['ner'] is None
    True
 
+POS Tags
+~~~~~~~~
 Similarly we can check the part-of-speech:
 
 .. code-block:: python
@@ -112,6 +123,8 @@ Similarly we can check the part-of-speech:
    >>> term['pos']
    'NN'
 
+Dependency Tree
+~~~~~~~~~~~~~~~
 We can traverse the dependency tree using the ``parents`` and ``children``
 properties.  In our example, "run" is the parent of "Obama" 
 (because "Obama" is the subject (``nsubj``) of "run"):
@@ -133,6 +146,8 @@ special ``root`` property that stores the head word.  Usually it's a verb:
    >>> sentence['root']
    ' 3: run (23,25) -'
 
+Coreference Chains
+~~~~~~~~~~~~~~~~~~
 A coreference chain is a series of references to the same entity.  In our 
 example, "President Obama" and "he" are each *mentions* from the same
 coreference chain.  We can access all the mentions of a coreference chain.
@@ -227,6 +242,8 @@ property of the sentence.
 The document as a whole also provides global ``mentions``, ``references``,
 and ``entities`` properties which can be iterated over directly..
 
+Reference
+---------
 .. py:class:: AnnotatedText(corenlp_xml, **kwargs)
 
    Create a new AnnotatedText object.  Only the first parameter is normally
