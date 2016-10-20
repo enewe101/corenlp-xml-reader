@@ -153,18 +153,52 @@ part of a mention corresponding to the 44th President of the United States,
 and part of a mention corresponding to some garments for sleeping.
 
 Once we have gotten ahold of a mention, we can access the coreference
-chain that is is part of, and we can access all the other mentions in the
-chain that refer to the same thing.  Back to our original example sentence,
-the coreference chain that includes "President Obama" should also include
-a mention due to the token "he":
+chain that it belongs to, which is found in the mention's ``'reference'`` 
+property.  Conversely, if we have accessed a coreference chain, we can
+find all of its mentions by looking at its ``'mentions'`` property.
+
+In our sentence "President Obama" and "he" are part of the same coreference
+chain.  Starting from the mention containing the token "Obama", we can
+acces the coreference chain starting, and then access the other mention
+of Obama (the one consisting of the token "he"):
 
 .. code-block:: python
 
    >>> reference = first_mention['reference']
    >>> len(reference['mentions'])
    2
-   >>> reference['mentions'][1]['tokens']
+   >>> second_mention = reference['mentions'][1]
+   >>> second_mention['tokens']
    ['12: he (57,58) -']
+
+Mentions have various properties:
+
+.. code-block:: python
+
+   >>> first_mention.keys()
+   ['head', 'end', 'reference', 'tokens', 'start', 'sentence_id']
+
+In addition to the coreference chain (``'reference'``), we get the id of 
+the sentence in which the mention is found, the list
+of token objects in the mention, the slice indices 
+(``'start'`` and ``'end'``) for those tokens as they occur in the 
+sentence's token list sentence's token list, and the head token of the 
+mentinon.
+
+References have various properties too:
+
+.. code-block:: python
+
+   >>> reference.keys()
+   ['mentions', 'id', 'representative']
+
+In addition to the mentions that are part of the coreference chain, we
+get a unique id (unique on a per-article-basis), and a reference to the
+"representative" mention.  The representative mention is the one that is
+deemed to have the fullest realization of the object's name.  So in our
+example, the representative reference would be "President Obama", not "he".
+This is useful for getting the human-readable name to represent the
+coreference chain.
 
 We can access all of the mentions or all of the coreference chains, for 
 a given sentence, using its ``mentions`` and ``references`` properties. 
