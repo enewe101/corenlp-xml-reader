@@ -240,43 +240,94 @@ class AnnotatedText(object):
 		mention['types'] = types
 
 
+	def _find_best_mention_overlap(self, mentions, start, end):
+		'''
+		Given a list of `mentions`, find the one whose character offset 
+		range which "best" matches the one defined by `start` and `length`.
+		'''
+		desired_range = (start, end)
+
+		# Get the offset range for each mention
+		mention_ranges = []
+		for mention in mentions:
+			start = mention['tokens'][0]['character_offset_begin']
+			end = mention['tokens'][-1]['character_offset_end']
+			mention_ranges.append((start, end))
+		
+		# Rate the coverage provided by each mention
+		coverage_scores = [
+			self._get_coverage_score(mention_range, desired_range)
+			for mention_range in mention_ranges
+		]
+
+		# Find the mention with the best coverage score
+		top_cover, top_mention = sorted(
+			zip(coverage_scores, mentions), reverse=True
+		)[0]
+
+		return top_mention
+
+
+	def _get_coverage_score(self, range1, range2):
+		'''
+		Computes the Jaccard overlap for two ranges of numbers.
+		'''
+		intersection_start = max(range1[0], range2[0])
+		intersection_end = min(range1[1], range2[1])
+		intersection_size = intersection_end - intersection_start
+
+		union_start = min(range1[0], range2[0])
+		union_end = max(range1[1], range2[1])
+		union_size = union_end - union_start
+
+		return intersection_size / float(union_size)
+
+
 	def _find_or_create_mention_by_offset_range(self, start, length):
 
-		pointer = start
-		mention = None
-		found_tokens = []
-		while pointer <= start + length:
+		pointer = start			# Character offset pointer in range
+		found_tokens = []		# Accumulates all tokens in range
+		mentions = []			# Accumulates all mentions in range
+		seen_mentions = set()	# Prevent duplication during accumulation
+		end = start + length	# Position after last character of range
+
+		# Find all of the tokens falling inside the offset range,
+		# and find all pre-existing mentions
+		while pointer <= end:
 
 			# find the next token
 			token = self._get_token_after(pointer)
 
 			# handle an edge case where a token that goes beyond the 
 			# the range is inadvertently accessed
-			if token['character_offset_end'] > start + length:
+			if token['character_offset_end'] > end:
 				break
 
-			# Add the token to the list of spanned tokens
+			# Keep the token and its mentions
 			found_tokens.append(token)
+			for mention in token['mentions']:
+				if (mention['start'], mention['end']) not in seen_mentions:
+					mentions.append(mention)
+					seen_mentions.add((mention['start'], mention['end']))
 
-			# find the mention related to that token, if any
-			try:
-				mention = token['mention']
-				break
-			except KeyError:
-				pass
-
+			# Move the pointer so we access the next token
 			pointer = token['character_offset_end']
 
-		# If no tokens associated with the mention are found 
-		# (a zero-token mention?), fail
+		# If there were no tokens found in the offset range, fail
 		if len(found_tokens) == 0:
 			return None
 
-		# If we found an existing mention, return it
-		if mention is not None:
-			return mention
+		# If exactly one mention was found, return it
+		if len(mentions) == 1:
+			return mentions[0]
 
-		# Otherwise, create a mention and a reference
+		# If multiple entities were found, return the one that overlaps
+		# most exactly with the AIDA mention
+		elif len(mentions) > 0:
+			return self._find_best_mention_overlap(mentions, start, end)
+
+		# If no mention was found (but there were tokens in the indicated
+		# range), then *create* a mention and reference with those tokens
 		sentence_id = found_tokens[0]['sentence_id']
 		sentence = self.sentences[sentence_id]
 		new_mention = {
@@ -303,7 +354,7 @@ class AnnotatedText(object):
 
 		# Add the mention to the tokens involved
 		for token in found_tokens:
-			token['mention'] = new_mention
+			token['mentions'].append(new_mention)
 
 		# Add the reference to the sentence
 		try:
@@ -358,7 +409,7 @@ class AnnotatedText(object):
 
 				# link the tokens to the mention
 				for token in mention['tokens']:
-					token['mention'] = mention
+					token['mentions'].append(mention)
 
 				# note the extent of the mention
 				mention['start'] = min(
@@ -843,7 +894,8 @@ class AnnotatedText(object):
 					token_tag.find('characteroffsetend').text),
 				'speaker': speaker,
 				'children': [],
-				'parents': []
+				'parents': [],
+				'mentions': []
 			})
 
 			tokens.append(token)
