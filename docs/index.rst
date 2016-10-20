@@ -165,7 +165,7 @@ First, we can get the mention that "Obama" is part of:
 
 Note that a token can be part of multiple mentions.  For example, consider
 the phrase "Obama's pyjamas".  If his pyjamas are mentioned multiple times,
-then there will be a coreference chain made for it, as well as Obama
+then there will be a coreference chain made for it, as well as for Obama
 himself.  And in the phrase "Obama's pyjamas", the token "Obama" is both 
 part of a mention corresponding to the 44th President of the United States,
 and part of a mention corresponding to some garments for sleeping.
@@ -175,10 +175,8 @@ chain that it belongs to, which is found in the mention's ``'reference'``
 property.  Conversely, if we have accessed a coreference chain, we can
 find all of its mentions by looking at its ``'mentions'`` property.
 
-In our sentence "President Obama" and "he" are part of the same coreference
-chain.  Starting from the mention containing the token "Obama", we can
-acces the coreference chain, and then access the other mention
-of Obama (the one consisting of the token "he"):
+So,  starting from the mention containing the token "Obama", we can get
+to the other mention ("he") like this:
 
 .. code-block:: python
 
@@ -201,7 +199,7 @@ the sentence in which the mention is found, the list
 of token objects in the mention, the slice indices 
 (``'start'`` and ``'end'``) for those tokens as they occur in the 
 sentence's token list, and the head token of the 
-mentinon.
+mention.
 
 References have various properties too:
 
