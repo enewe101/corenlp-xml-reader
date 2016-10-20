@@ -49,11 +49,13 @@ Suppose we have the one-sentence document:
 
    *President Obama cannot run for a third term (but I think he wants to).*
 
+Let's assume that it has been processed by CoreNLP, creating the output 
+file ``obama.txt.xml``.  
+
 Instantiation
 ~~~~~~~~~~~~~
-Let's assume that it has been processed by CoreNLP, creating the output 
-file ``obama.txt.xml``.  Let's import the module and get an ``AnnotatedText`` object.
-
+The first thing we do is import the module and get an ``AnnotatedText`` 
+object.
 
 .. code-block:: python
 
