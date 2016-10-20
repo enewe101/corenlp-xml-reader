@@ -90,7 +90,7 @@ other stuff:
 
    >>> obama.keys()
    ['word', 'character_offset_begin', 'character_offset_end', 'pos', 
-   'lemma', 'sentence_id', 'entity_idx', 'speaker', 'mention', 'parents', 
+   'lemma', 'sentence_id', 'entity_idx', 'speaker', 'mentions', 'parents', 
    'ner', 'id']
 
 "Obama" is the name of a person, so, if CoreNLP is working well, it should
@@ -141,13 +141,22 @@ First, we can get the mention that "Obama" is part of:
 
 .. code-block:: python
 
-    >>> first_mention = obama['mention']
+    >>> first_mention = obama['mentions'][0]
     >>> first_mention['tokens']
     [' 0: President (0,8) -', ' 1: Obama (10,14) PERSON']
 
-Then, from a given mention, we can access the chain, and all other mentions.
-The coreference chain that includes "President Obama" should also include
-"he":
+Note that a token can be part of multiple mentions.  For example, consider
+the phrase "Obama's pyjamas".  If his pyjamas are mentioned multiple times,
+then there will be a coreference chain made for it, as well as Obama
+himself.  And in the phrase "Obama's pyjamas", the token "Obama" is both 
+part of a mention corresponding to the 44th President of the United States,
+and part of a mention corresponding to some garments for sleeping.
+
+Once we have gotten ahold of a mention, we can access the coreference
+chain that is is part of, and we can access all the other mentions in the
+chain that refer to the same thing.  Back to our original example sentence,
+the coreference chain that includes "President Obama" should also include
+a mention due to the token "he":
 
 .. code-block:: python
 
