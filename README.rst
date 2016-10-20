@@ -177,7 +177,7 @@ find all of its mentions by looking at its ``'mentions'`` property.
 
 In our sentence "President Obama" and "he" are part of the same coreference
 chain.  Starting from the mention containing the token "Obama", we can
-acces the coreference chain starting, and then access the other mention
+acces the coreference chain, and then access the other mention
 of Obama (the one consisting of the token "he"):
 
 .. code-block:: python
