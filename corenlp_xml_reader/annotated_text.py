@@ -4,9 +4,6 @@ import re
 from bs4 import BeautifulSoup as Soup
 import time
 
-class AnnotatedTextException(Exception):
-	pass
-
 class AnnotatedText(object):
 
 	MATCH_TAG = re.compile(r'^\((\S+)\s*')
@@ -604,19 +601,19 @@ class AnnotatedText(object):
 		depth += 1
 		if 'children' in root_token:
 			for relation, child in root_token['children']:
-				print '\t'*depth + relation + ' ' + child['word']
+				print '  '*depth + relation + ' ' + child['word']
 				self.print_dep_tree(child, depth)
 
 
 
 
 	def print_tree(self, tree):
-		if len(tree['children']) == 0:
-			print '\n'+('\t'*tree['depth'])+tree['code']+ ' : ' + tree['word']
+		if len(tree['c_children']) == 0:
+			print ''+('  '*tree['c_depth'])+tree['c_tag']+ ' : ' + tree['word']
 
 		else:
-			print '\n' + ('\t'*tree['depth'])+tree['code']+ ' :'
-			for child in tree['children']:
+			print '' + ('  '*tree['c_depth'])+tree['c_tag']+ ' :'
+			for child in tree['c_children']:
 				self.print_tree(child)
 
 
@@ -630,8 +627,10 @@ class AnnotatedText(object):
 			'id': int(sentence_tag['id']) - 1,
 			'tokens': self._read_tokens(sentence_tag),
 			'root': Token(),
-			#'parse': self.read_parse(sentence_tag.find('parse').text),
 		})
+
+		# Build the constituency parse
+		self._read_constituency_parse(sentence, sentence_tag)
 
 		# Give the tokens the dependency tree relation
 		self._read_dependencies(sentence, sentence_tag)
@@ -713,36 +712,64 @@ class AnnotatedText(object):
 			
 
 
-	def read_parse(self, parse_text, parent=None, depth=0):
+	def _read_constituency_parse(self, sentence, sentence_tag):
 
-		element = {'depth':depth}
+		# Try to get the serialized sentence parse. If it's not there,
+		# then fail (it means CoreNLP was run without that annotator).
+		try:
+			parse_text = sentence_tag.find('parse').text
+		except AttributeError:
+			return 
+
+		# Recursively parse the constituency tree serialization
+		# Assign the root node to 'croot' (for 'constituency root')
+		sentence['c_root'], ptr = self._recursive_parse(
+			parse_text, sentence
+		)
+
+
+	def _recursive_parse(
+		self,
+		parse_text,
+		sentence,
+		parent=None,
+		depth=0,
+		token_ptr=0
+	):
+
+		# Initialize a constitency tree node
+		element = {'c_depth':depth, 'c_parent':parent, 'c_children':[]}
 
 		# get the phrase or POS code
-		element['code'] = self.MATCH_TAG.match(parse_text).groups()[0]
+		element['c_tag'] = self.MATCH_TAG.match(parse_text).groups()[0]
 
 		# get the inner text
 		inner_text = self.MATCH_TAG.sub('', parse_text)
 		inner_text = self.MATCH_END_BRACKET.sub('', inner_text)
 
-		# if the inner text is just a word, get it, and don't recurse
+		# if the inner text is just a word, then this element is the
+		# token itself.  Get the token, and increment token_ptr
 		if self.MATCH_TEXT_ONLY.match(inner_text):
-			element['word'] = inner_text.strip()
-			element['children'] = []
-			
+			token = sentence['tokens'][token_ptr]
+			token.update(element)
+			element = token
+			token_ptr += 1
 
 		# if the inner text encodes child nodes, parse them recursively
 		else: 
 			element['word'] = None
-			child_texts = self.split_parse_text(inner_text)
-			element['children'] = [
-				self.read_parse(ct, element, depth+1) for ct in child_texts]
+			child_texts = self._split_parse_text(inner_text)
+			element['c_children'] = []
+			for ct in child_texts:
+				child, token_ptr = self._recursive_parse(
+					ct, sentence, element, depth+1, token_ptr
+				) 
+				element['c_children'].append(child)
 
-		element['parent'] = parent
-
-		return element
+		return element, token_ptr
 
 
-	def split_parse_text(self, text):
+	def _split_parse_text(self, text):
 		if text[0] != '(':
 			raise ValueError('expected "(" at begining of sentence node.')
 
@@ -1040,7 +1067,7 @@ class Sentence(dict):
 		if 'children' in root_token:
 			for relation, child in root_token['children']:
 				string +=  (
-					'\t'*depth + '<' + relation + '> ' + str(child) + '\n')
+					'  '*depth + '<' + relation + '> ' + str(child) + '\n')
 				string += self._dep_tree_str(child, depth)
 
 		return string
