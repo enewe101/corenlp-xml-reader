@@ -6,8 +6,18 @@ import time
 
 class AnnotatedText(object):
 
-	MATCH_TAG = re.compile(r'^\((\S+)\s*')
+	# Was discovering that sometimes there are empty tags, and they 
+	# should not be given entries in the parse tree
+	# May have fixed the problem with unbalanced parentheses but not
+	# need to test
+
+	MATCH_TAG = re.compile(r'^\(([^\)\s]*)\s*')
 	MATCH_END_BRACKET = re.compile(r'\s*\)\s*$')
+
+	# Matches a constituent that is not simple (consists of 
+	# nested constituents, or a POS-token tuple, but not a simple token
+	MATCH_COMPOUND_CONSTITUENT = re.compile(r'\(.+\)')
+
 	MATCH_TEXT_ONLY = re.compile(r'^[^)(]*$')
 
 	EXCLUDE_NER_TYPES = set([
@@ -749,14 +759,7 @@ class AnnotatedText(object):
 
 		# if the inner text is just a word, then this element is the
 		# token itself.  Get the token, and increment token_ptr
-		if self.MATCH_TEXT_ONLY.match(inner_text):
-			token = sentence['tokens'][token_ptr]
-			token.update(element)
-			element = token
-			token_ptr += 1
-
-		# if the inner text encodes child nodes, parse them recursively
-		else: 
+		if self.MATCH_COMPOUND_CONSTITUENT.match(inner_text):
 			element['word'] = None
 			child_texts = self._split_parse_text(inner_text)
 			element['c_children'] = []
@@ -766,32 +769,177 @@ class AnnotatedText(object):
 				) 
 				element['c_children'].append(child)
 
+		# if the inner text contains compund constituents,
+		# parse them recursively
+		else: 
+			token = sentence['tokens'][token_ptr]
+			token.update(element)
+			element = token
+			token_ptr += 1
+
 		return element, token_ptr
 
 
 	def _split_parse_text(self, text):
-		if text[0] != '(':
-			raise ValueError('expected "(" at begining of sentence node.')
+		'''
+		When there are multiple root-level compound constituents,
+		this method splits them up so they can each be processed 
+		separately.
+
+		It parses character-by-character, and knows when to split the
+		string based on when the bracket nesting level drops to zero.
+
+		There is a complication which arises because literal brackets
+		can appear in the constituent content (when it is a plain bracket
+		token), and these should not factor into the bracket nesting
+		level.  For this reason, the parser is a state machine that
+		interprets brackets differently depending on their context.
+		'''
 
 		depth = 0
 		strings = []
 		curstring = ''
-		for c in text:
 
-			# skip whitespace between nodes
-			if depth == 0 and c.strip() == '':
-				continue
+		# We begin in a state that expects the opening bracket for a
+		# compound constituent
+		state = 'expecting-opening'
 
-			curstring += c
-			if c == '(':
+		# Iterate through all of the characters.  Collect a list `strings`
+		# consisting of strings of characters belonging to the same
+		# root-level compound constituent
+		for i, c in enumerate(text):
+
+			# We are expecting an open bracket to start a new constituent
+			if state == 'expecting-opening':
+
+				# If we don't see an opening bracket, something is wrong
+				if c != '(':
+					raise ValueError('expected "(" at tag start')
+
+				# Going deper into a nested constituent
 				depth += 1
-			if c == ')':
-				depth -= 1
 
-			if depth == 0:
+				# We will now be expecting characters representing the
+				# POS / Constituent tag
+				state = 'expecting-tag'
+
+			# We are expecting the constituent tag's characters
+			elif state == 'expecting-tag':
+
+				# The constituent tag is terminated by a space
+				if c == ' ':
+					# We are now expecting the first character in the
+					# constituent "content".  The constituent content
+					# can be a nested compound constituent or a literal 
+					# token.  The first char needs to be treated 
+					# differently, because this is where literal brackets
+					# can arise
+					state = 'expecting-first-content-char'
+
+			# We are collecting the first character of the constituent's
+			# contents.  Literal brackets can arise here, so we'll 
+			# watch out for them.
+			elif state == 'expecting-first-content-char':
+
+				# Normally an opening bracket here represents the start
+				# of a nested compound constituent. But if it is 
+				# Immediately followed by a closing bracket, then it
+				# must actually be a literal bracket token
+				if c == '(':
+
+					# Being followed by a closing bracket indicates it
+					# was a literal bracket token
+					if text[i+1] == ')':
+						state = 'expecting-content'
+						pass
+
+					# Otherwise it is marking the beginning of a new
+					# compound constituent.  We'll now be expecting its
+					# POS / Constituent tag
+					else:
+						state = 'expecting-tag'
+						depth += 1
+
+				# After collecting the first content character,
+				# We expect more content characters, but it is no longer
+				# possible to have literal brackets.
+				else:
+					state = 'expecting-content'
+
+			# We are collecting characters for a literal token 
+			elif state == 'expecting-content':
+
+				# The literal token is terminated by a closing bracket
+				if c == ')':
+
+					# This completes the compound constituent that the
+					# literal token was part of.  We are moving up (out)
+					# in terms of level of nesting
+					state = 'done-constituent'
+					depth -= 1
+
+			# We have just completed a constituent.  Two things can 
+			# happen: either we can close another level of nesting, 
+			# completing a higher up constituent, or we can start a new
+			# peer-level constituent.
+			elif state == 'done-constituent':		
+
+				# A closing bracket means we are closing another higher
+				# up constituent
+				if c == ')':
+					depth -= 1
+
+				# If we see a space, then we're expecting to open a 
+				# new peer-level constituent.  
+				elif c == ' ':
+					state = 'expecting-opening'
+
+				# No other character should be seen in this state,
+				# otherwise something has gone wrong.
+				else:
+					raise ValueError(
+						'Expected closing a constituent or opening'
+						' a new one.  Saw "%s" instead' % c
+					)
+
+			# For this round of the parsing cycle we have finished
+			# working out the state transition and change in depth
+			# We now worry about whether to split the string
+			# or accumulate the character
+
+			# As long as we're not at the root level, we keep accumulating
+			# characters representing one root-level compound constituent
+			# and all it's nested children
+			if depth > 0:
+				curstring += c
+
+			# If we bottom out again, then we've finished a root level
+			# constituent.  Append the tokens we've accumulated for it
+			# to a list of strings that each represent the root-level
+			# compound constituents
+			elif depth == 0:
+
+				# We ignore spaces that occur between root-level
+				# constituents.
+				if c == ' ':
+					continue
+
+				# Append the last character in the root level constituent
+				# then store away the string representing this root-level
+				# constituent, and start a new string for the next
+				curstring += c
 				strings.append(curstring)
 				curstring = ''
 
+			# Otherwise, depth is less than zero, which shouldn't happen!
+			else:
+				raise ValueError('Too many closing brackets')
+
+		# Once we've consumed all characters, we should be at depth 0,
+		# otherwise something's gone wrong!
+		if depth > 0:
+			raise ValueError('Missing closing bracket(s)')
+			
 		return strings
 
 
