@@ -4,6 +4,9 @@ import re
 from bs4 import BeautifulSoup as Soup
 import time
 
+CLOSING_BRACKET = re.compile(r'\)+( |$)')
+
+
 class AnnotatedText(object):
 
 	# Was discovering that sometimes there are empty tags, and they 
@@ -851,7 +854,6 @@ class AnnotatedText(object):
 					# was a literal bracket token
 					if text[i+1] == ')':
 						state = 'expecting-content'
-						pass
 
 					# Otherwise it is marking the beginning of a new
 					# compound constituent.  We'll now be expecting its
@@ -870,13 +872,24 @@ class AnnotatedText(object):
 			elif state == 'expecting-content':
 
 				# The literal token is terminated by a closing bracket
+				# However, it is possible that we see a literal closing
+				# bracket that is not meant to terminate the content
 				if c == ')':
 
-					# This completes the compound constituent that the
-					# literal token was part of.  We are moving up (out)
-					# in terms of level of nesting
-					state = 'done-constituent'
-					depth -= 1
+					# If the closing bracket(s) seen at this point are
+					# followed by a space, then they are metacharacters
+					# signalling the end of the literal token.
+					if CLOSING_BRACKET.match(text[i:]):
+						# This completes the compound constituent that the
+						# literal token was part of.  We are moving up 
+						# (out) in terms of level of nesting
+						state = 'done-constituent'
+						depth -= 1
+
+					# Otherwise it was a literal bracket.  There's no
+					# state change and no change in depth
+					else:
+						pass
 
 			# We have just completed a constituent.  Two things can 
 			# happen: either we can close another level of nesting, 
@@ -897,9 +910,10 @@ class AnnotatedText(object):
 				# No other character should be seen in this state,
 				# otherwise something has gone wrong.
 				else:
+					print text[i-4:i+4], text[i]
 					raise ValueError(
 						'Expected closing a constituent or opening'
-						' a new one.  Saw "%s" instead' % c
+						' a new one.'#  Saw "%s" instead' % c
 					)
 
 			# For this round of the parsing cycle we have finished
