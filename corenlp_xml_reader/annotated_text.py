@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup as Soup
 import time
 
 CLOSING_BRACKET = re.compile(r'\)+( |$)')
+# Article that made this necessary: wj_article_6794.txt.xml
 
 
 class AnnotatedText(object):
