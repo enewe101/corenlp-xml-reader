@@ -757,8 +757,8 @@ class AnnotatedText(object):
 		inner_text = self.MATCH_TAG.sub('', parse_text)
 		inner_text = self.MATCH_END_BRACKET.sub('', inner_text)
 
-		# if the inner text is just a word, then this element is the
-		# token itself.  Get the token, and increment token_ptr
+		# if the inner text contains compund constituents,
+		# parse them recursively
 		if self.MATCH_COMPOUND_CONSTITUENT.match(inner_text):
 			element['word'] = None
 			child_texts = self._split_parse_text(inner_text)
@@ -769,8 +769,8 @@ class AnnotatedText(object):
 				) 
 				element['c_children'].append(child)
 
-		# if the inner text contains compund constituents,
-		# parse them recursively
+		# if the inner text is just a word, then this element is the
+		# token itself.  Get the token, and increment token_ptr
 		else: 
 			token = sentence['tokens'][token_ptr]
 			token.update(element)
@@ -1111,6 +1111,44 @@ class Sentence(dict):
 			if attr not in self:
 				self[attr] = []
 
+
+	def __eq__(self, other):
+		"""
+		There doesn't seem to any obviously predominant notion of sentence
+		object equality.  For this reason, we will rely on what is the default
+		for Python objects: two objects are equal if they have the same python
+		ID (which for cPython means if they have the same memory address).
+
+		(Note that two sentence objects that have all the same *value* deep
+		down, but which are distinct objects with distinct memory addresses
+		aren't equal).
+
+		Normally this would not involve any need to override __eq__, however
+		the Sentence object is based on `dict`, which actually does try to
+		figure out if it's values are equal.  So here, we forcibly revert this 
+		behavior.
+
+		Now it might seem like we should try to compare the values, that would
+		be 'nice' and 'expected'.  But this turns out to be really complicated
+		because of how deeply nested Sentence objects are, containing
+		references to all other parts of the article.  If not overriden, 
+		`dict`'s implementation of __eq__ causes an explosion of recursive
+		equality tests on all the sentences outgoing references, and thiers,
+		etc.
+
+		It's up to the caller, if she has a specific notion of "equality" in 
+		mind, to test whatever that notion is for herself.  It is not easy
+		to forsee what this might be, and adopting an opinion here would
+		probably lead to unexpected and not-useful behavior for a lot of
+		usecases!
+		"""
+		return id(self) == id(other)
+
+
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
+
 	def as_string(self):
 		'''
 			return a simple single-line string made from all the tokens in 
@@ -1238,6 +1276,19 @@ class Token(dict):
 		description = description.encode('utf8')
 
 		return description
+
+	def __eq__(self, other):
+		'''
+		See the docstring for Sentence.__eq__().
+		'''
+		return id(self) == id(other)
+
+
+	def __ne__(self, other):
+		'''
+		See the docstring for Sentence.__eq__().
+		'''
+		return not self.__eq__(other)
 
 
 	def __repr__(self):
