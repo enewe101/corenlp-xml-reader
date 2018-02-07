@@ -40,7 +40,8 @@ class AnnotatedText(object):
         exclude_ordinal_NERs=False,
         exclude_long_mentions=False,
         long_mention_threshold=5,
-        exclude_non_ner_coreferences=False
+        exclude_non_ner_coreferences=False,
+        initial_offset=0
     ):
 
         # If true, do not include NER's of the types listed in 
@@ -55,6 +56,8 @@ class AnnotatedText(object):
         # If true, ignore coreference chains that don't have a Named Entity
         # as their representative mention.  
         self.exclude_non_ner_coreferences = exclude_non_ner_coreferences
+
+        self.initial_offset = initial_offset
 
         # User can choose the kind of dependency parse they wish to use
         # Valid options listed below.  Ensure that a valid option was chosen.
@@ -1077,10 +1080,10 @@ class AnnotatedText(object):
                 'ner': (
                     None if token_tag.find('ner').text == 'O' 
                     else token_tag.find('ner').text),
-                'character_offset_begin': int(
-                    token_tag.find('characteroffsetbegin').text),
-                'character_offset_end': int(
-                    token_tag.find('characteroffsetend').text),
+                'character_offset_begin': get_offset(
+                    token, 'characteroffsetbeginint'),
+                'character_offset_end': get_offset(
+                    token, 'characteroffsetend'),
                 'speaker': speaker,
                 'children': [],
                 'parents': [],
@@ -1090,6 +1093,11 @@ class AnnotatedText(object):
             tokens.append(token)
 
         return tokens
+
+
+    def _get_offset(self, token, tagname):
+        return int(token_tag.find(tagname).text) + self.initial_offset
+
 
     def fix_word(self, word):
         if word == '-LRB-':
