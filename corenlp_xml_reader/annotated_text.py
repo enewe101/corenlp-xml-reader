@@ -1080,10 +1080,10 @@ class AnnotatedText(object):
                 'ner': (
                     None if token_tag.find('ner').text == 'O' 
                     else token_tag.find('ner').text),
-                'character_offset_begin': get_offset(
-                    token, 'characteroffsetbeginint'),
-                'character_offset_end': get_offset(
-                    token, 'characteroffsetend'),
+                'character_offset_begin': self._get_offset(
+                    token_tag, 'characteroffsetbegin'),
+                'character_offset_end': self._get_offset(
+                    token_tag, 'characteroffsetend'),
                 'speaker': speaker,
                 'children': [],
                 'parents': [],
@@ -1095,7 +1095,7 @@ class AnnotatedText(object):
         return tokens
 
 
-    def _get_offset(self, token, tagname):
+    def _get_offset(self, token_tag, tagname):
         return int(token_tag.find(tagname).text) + self.initial_offset
 
 
