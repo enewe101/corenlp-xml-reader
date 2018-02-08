@@ -101,6 +101,10 @@ class AnnotatedText(object):
         # Build a Python representation of all the sentences
         self._read_all_sentences()
 
+        # Build a dictionary for looking up tokens by their offset.  This is
+        # needed when/if reading in the aida file later
+        self.refresh_token_offsets()
+
         # build a Python representation of the coreference chains
         self._build_coreferences()
 
@@ -132,7 +136,6 @@ class AnnotatedText(object):
         # Initialize some containers to hold data found in sentences
         self.sentences = []    
         self.tokens = []
-        self.tokens_by_offset = {}
         self.num_sentences = 0
 
         # Get all the sentence tags
@@ -393,7 +396,6 @@ class AnnotatedText(object):
                     raise
 
         return token
-
 
 
     def _get_next_coref_id(self):
@@ -658,12 +660,16 @@ class AnnotatedText(object):
         # Exclude the "null" tokens that simulate sentence head.
         self.tokens.extend(sentence['tokens'])
 
-        token_offsets = dict([
-            (t['character_offset_begin'], t) for t in sentence['tokens']
-        ])
-        self.tokens_by_offset.update(token_offsets)
-
         return sentence
+
+
+    def refresh_token_offsets(self):
+        """
+        Sets, or refreshes a dictionary that enables looking up tokens based on
+        their character offset in the file.
+        """
+        self.tokens_by_offset = {
+            t['character_offset_begin']: t for t in self.tokens}
 
 
     def _read_dependencies(self, sentence, sentence_tag):
